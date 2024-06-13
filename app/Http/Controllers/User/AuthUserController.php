@@ -8,6 +8,7 @@ use App\Http\Requests\User\changePasswordeRequest;
 use App\Models\Admin;
 use App\Models\User;
 use App\Notifications\LoginNotification;
+use App\Notifications\ResetPasswordNotification;
 use App\Notifications\verificationNotification;
 use App\trait\apiResponse;
 use Illuminate\Http\Request;
@@ -137,14 +138,15 @@ return response()->json(['message' => ' successfully signed out']);*/
             return response()->json(['message' => 'Invalid email'], 400);
         }
 
-        $token = Str::random(60);
+      /*  $token = Str::random(60);
         $user->reset_password_token = $token;
         $user->save();
 
         $resetUrl = config('app.url') . '/api/reset-password/' . $token;
 
         // Use Laravel's Mail or a third-party service to send the email:
-        // ...
+        // ...*/
+        $user->notify(new ResetPasswordNotification());
 
 
         return response()->json(['message' => 'Password reset link sent successfully']);
@@ -152,29 +154,27 @@ return response()->json(['message' => ' successfully signed out']);*/
 
     public function resetPassword(Request $request)
     {
-        $request->validate([
-            'token' => 'required',
+        $rules = [
+            'token' => 'required|max:6|min:6|Exists:otps',
+            'email' => 'required|string|email|max:100|Exists:users',
             'password' => 'required|confirmed|min:8',
-        ]);
+        ];
+        $validator = Validator::make($request->all(), $rules);
 
-        $status = Password::broker()->resetPassword(
-            $request->only('email', 'password', 'password_confirmation', 'token'),
-            function ($user, $password) {
-                $user->forceFill([
-                    'password' => Hash::make($password),
-                    'reset_password_token' => null, // Clear token
-                ])->save();
-            }
-        );
-
-        if ($status === Password::PASSWORD_RESET) {
-            // Send mobile notification using your chosen service (optional)
-            // ...
-
-            return response()->json(['message' => 'Password reset successfully'], 200);
+        if ($validator->fails()) {
+          //  $code = $this->returnCodeAccordingToInput($validator);
+          //  return $this->returnValidationError($code, $validator);
+            return $this->returnError('',"validation error",);
         }
+        $user = User::where('email',$request->email)->first();
+        $user->update(['password'=>Hash::make($request->password)]);
+       // $user->token()->delete;
+        return $this->returnData('change password',$user,'');
 
-        return response()->json(['message' => 'Invalid token or email'], 400);
+
+
+
+
     }
 
     public function changePassword(Request $request)
